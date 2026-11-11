@@ -95,12 +95,12 @@ Then start a new session, or open `/hooks` once, so Claude Code loads the skill 
 **Claude Code cloud sessions (claude.ai/code).** Containers are rebuilt per session. Add this to the environment's setup script so DMS is installed every time:
 
 ```bash
-if git clone --depth 1 --branch v1.5.0 https://github.com/bahattab/Dynamic-Model-Selection /tmp/dms; then
+if git clone --depth 1 https://github.com/bahattab/Dynamic-Model-Selection /tmp/dms; then
   bash /tmp/dms/0-dynamic-model-selection/scripts/install.sh || true
 fi
 ```
 
-**claude.ai / Claude apps.** Upload `0 - Dynamic Model Selection.skill` from the [latest release](https://github.com/bahattab/Dynamic-Model-Selection/releases/latest) under Settings → Capabilities → Skills. The skill works there without the hook; trigger it with `DMS`.
+**claude.ai / Claude apps.** Upload `0 - Dynamic Model Selection.skill` (a zip of the `0-dynamic-model-selection/` folder; attached to each release) under Settings → Capabilities → Skills. The skill works there without the hook; trigger it with `DMS`.
 
 **Other agents (Codex, Cursor, Gemini CLI, Copilot, …).** Copy `0-dynamic-model-selection/` into the agent's skills folder (for example `~/.agents/skills/`), or reference `SKILL.md` from the agent's `AGENTS.md`.
 
@@ -156,7 +156,7 @@ Order: opus check → haiku check → sonnet by default. Start low; escalate one
 
 ## Versioning
 
-[Semantic versioning](https://semver.org). Releases are tagged `vX.Y.Z`; each release attaches `0 - Dynamic Model Selection.skill`. History: [`CHANGELOG.md`](0-dynamic-model-selection/CHANGELOG.md).
+[Semantic versioning](https://semver.org). The current version is in `0-dynamic-model-selection/VERSION`; releases are tagged `vX.Y.Z` and attach `0 - Dynamic Model Selection.skill`. History: [`CHANGELOG.md`](0-dynamic-model-selection/CHANGELOG.md).
 
 ## Related skills
 

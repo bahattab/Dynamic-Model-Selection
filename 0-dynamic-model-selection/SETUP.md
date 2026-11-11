@@ -33,7 +33,7 @@ If step 2 shows no route line, check `~/.claude/settings.json` for a `UserPrompt
 Cloud containers are rebuilt for each session, so files installed by hand disappear. Add this environment setup script (claude.ai/code → environment settings → Setup script):
 
 ```bash
-if git clone --depth 1 --branch v1.5.0 https://github.com/bahattab/Dynamic-Model-Selection /tmp/dms; then
+if git clone --depth 1 https://github.com/bahattab/Dynamic-Model-Selection /tmp/dms; then
   bash /tmp/dms/0-dynamic-model-selection/scripts/install.sh || true
 fi
 ```
