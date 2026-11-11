@@ -1,0 +1,3 @@
+interface:
+  display_name: "0 - Dynamic Model Selection"
+  short_description: "Route each task to haiku, sonnet, or opus by complexity (trigger: DMS)"
