@@ -158,6 +158,14 @@ Order: opus check → haiku check → sonnet by default. Start low; escalate one
 
 [Semantic versioning](https://semver.org). The current version is in `0-dynamic-model-selection/VERSION`; releases are tagged `vX.Y.Z` and attach `0 - Dynamic Model Selection.skill`. History: [`CHANGELOG.md`](0-dynamic-model-selection/CHANGELOG.md).
 
+**Releases are automatic.** The [`Release`](.github/workflows/release.yml) workflow runs when `VERSION` changes on `main`. It creates tag `vX.Y.Z`, uses the matching `## X.Y.Z` section of `CHANGELOG.md` as the notes, and attaches the `.skill` package. To publish a new version:
+
+1. Set the new number in `0-dynamic-model-selection/VERSION` (and `metadata.version` in `SKILL.md`).
+2. Add a `## X.Y.Z — YYYY-MM-DD` section at the top of `CHANGELOG.md`.
+3. Merge to `main`.
+
+A version that already has a tag is skipped, and a missing changelog section stops the run with an error. You can also start the workflow by hand from the Actions tab (**Run workflow**).
+
 ## Related skills
 
 - **0 - Model Selector (MS skill):** cross-vendor and AI-product model selection with evaluated fallbacks. Use it for choosing models in general; use DMS for routing Claude work by task complexity at run time.

@@ -1,0 +1,77 @@
+# Publishes a GitHub release when 0-dynamic-model-selection/VERSION changes on main.
+# The release is tagged vX.Y.Z, takes its notes from the matching CHANGELOG.md section,
+# and attaches "0 - Dynamic Model Selection.skill" (a zip of the skill folder).
+# A version that already has a tag is skipped, so re-runs are safe.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 0-dynamic-model-selection/VERSION
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Read and validate version
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < 0-dynamic-model-selection/VERSION)"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::VERSION must be X.Y.Z, got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if the tag already exists
+        id: tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists; nothing to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the .skill package
+        if: steps.tag.outputs.exists == 'false'
+        run: zip -qr "0 - Dynamic Model Selection.skill" 0-dynamic-model-selection
+
+      - name: Extract release notes from CHANGELOG.md
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' 0-dynamic-model-selection/CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## $VERSION' section"
+            exit 1
+          fi
+
+      - name: Create the release
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" "0 - Dynamic Model Selection.skill" \
+            --target "$GITHUB_SHA" \
+            --title "0 - Dynamic Model Selection v$VERSION" \
+            --notes-file notes.md
