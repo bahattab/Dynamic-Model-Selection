@@ -33,12 +33,14 @@ In Claude Code, the `dms` mod makes these decisions in code, so the main model s
 your prompt
    │
    ├─ < 12 words, or no wording hint for another tier .... nothing, no cost
-   ├─ hint names another tier ............................. one small Haiku judge call
-   │      confident (≥ 0.6 up / ≥ 0.75 down) and context ≤ 40K tokens → switch the main model
+   ├─ hint names another tier (or non-Latin script) ....... one small Haiku judge call
+   │      confident (≥ 0.6 up / ≥ 0.75 down) and context ≤ 40K up / 150K down → switch the main model
    │      confident but context larger ......................... one line recommending /model
+   ├─ later prompt with no hint for the switched tier ...... switch back to the app's model
+   ├─ /model, a new pick in the app, or DMS off ............ the switch ends at once
    └─ subagent spawn
-          model set by the caller ........................ never changed
-          no model, Opus parent .......................... judge may pick a cheaper tier
+          model set by the caller, or a typed agent ...... never changed
+          no model, general-purpose, Opus parent ......... judge may pick a cheaper tier
 ```
 
 **Without the mod (other hosts, or the hook only):**
@@ -152,11 +154,11 @@ Full per-host steps and settings: [`0-dynamic-model-selection/SETUP.md`](0-dynam
 
 ## Measuring savings
 
-The hook and the model write one line per event to `~/.config/dms/routes.log` (`inject`, `skip`, `trigger`, `on`, `off`, `route <tier> <subagent|session>`), never prompt text. `DMS status` summarises it with `scripts/dms-report.sh` (Windows: `scripts\dms-report.ps1`), including the share of prompts that were actually routed.
+The hook and the model write one line per event to `~/.config/dms/routes.log` (`inject`, `skip`, `trigger`, `on`, `off`, `mod`, `route <tier> <subagent|session>`); the mod writes `mod.log` (`pass`, `switch`, `revert`, `recommend`, `judge`, `handpick`, `off`, `auto`, `keep`). Neither holds prompt text. `DMS status` summarises it with `scripts/dms-report.sh` (Windows: `scripts\dms-report.ps1`), including the share of prompts that were actually routed.
 
 ## Other routing mods
 
-`model-selector` and `model-router` (from other Claude Code mod packs) decide the same things and would override DMS: Model Router changes even a subagent model DMS chose, and Model Selector runs a Sonnet call on every prompt. The installers disable both (`--keep-conflicts` to skip). `handoff` and `cache-clock` do not conflict. The `dms` mod adapts Model Router's judge prompt from claude-code-templates (MIT; see `plugins/dms/LICENSE-THIRD-PARTY.md`).
+`model-selector` and `model-router` (from other Claude Code mod packs) decide the same things and would override DMS: Model Router changes even a subagent model DMS chose, and Model Selector runs a Sonnet call on every prompt. The installers disable both, only after the `dms` mod installed, and `--uninstall` turns them back on (`--keep-conflicts` to skip). `handoff` and `cache-clock` do not conflict. The `dms` mod adapts Model Router's judge prompt from claude-code-templates (MIT; see `plugins/dms/LICENSE-THIRD-PARTY.md`).
 
 ## Host support
 

@@ -3,14 +3,17 @@
 ## 1.7.0 — 2026-11-14
 Routing moves into code, so the main model spends no tokens on it.
 - **New `dms` mod** (`plugins/dms`, installed from this repo's marketplace): a Claude Code mod that makes the main-model decision in code.
-  - Free pre-filter first (word count, then wording hints); a small Haiku judge (≤ 60 output tokens) runs only when the hint names a different tier.
-  - Switches the main model automatically on a clear win (confidence ≥ 0.6 up, ≥ 0.75 down) and only while the context is ≤ 40K tokens, so losing the prompt cache stays cheap; above that it recommends `/model` instead.
-  - A 3-prompt cooldown prevents flip-flopping, and a hand pick in the app always wins.
-- **Subagent conflict fixed:** a model the caller sets is never changed. Only a subagent with no model, under an Opus parent, may move to a cheaper tier, never up.
-- **Merged with the Model Router idea** (claude-code-templates, MIT; notice in `plugins/dms/LICENSE-THIRD-PARTY.md`). The installers disable the `model-selector` and `model-router` mods, which would make the same decisions twice (`--keep-conflicts` / `-KeepConflicts` to skip). No unlicensed third-party code is included.
-- **Hook goes quiet when the mod runs:** the mod refreshes `~/.config/dms/mod-active`; while it is fresh, the hook adds no per-prompt reminder. `DMS on/off` and `DMS <task>` still work.
-- **Report:** `dms-report.sh` / `.ps1` show the engine in use, main switches, recommendations, judge calls, hand picks and subagent decisions.
-- **Tests:** 18 engine tests for the mod (`claude plugin test`), 4 new hook cases, and installer checks for the mod and conflict handling; CI gains a mod job.
+  - Free pre-filter first (word count, then English and Arabic wording hints; other non-Latin prompts always go to the judge); a small Haiku judge runs only when the hint names a different tier. The task is fenced so it cannot close its own tag.
+  - Switches the main model automatically on a clear win (confidence ≥ 0.6 up, ≥ 0.75 down) and only while losing the prompt cache stays cheap: context ≤ 40K tokens up, ≤ 150K down (`maxSwitchContextDown`); an unknown size never switches. Otherwise it recommends `/model`.
+  - A switch lasts while the task does: the next substantial prompt without a hint for that tier switches back. `/model`, a new pick in the app, or `DMS off` ends it at once.
+  - A 3-prompt cooldown prevents flip-flopping and repeated judge calls or recommendations; `/clear` resets it. Switching down to Haiku lowers a `xhigh`/`max` effort to `high`.
+- **Subagent conflict fixed:** a model the caller sets is never changed, nor is a typed subagent (it may define its own model). Only a general-purpose subagent with no model, under an Opus parent, may move to a cheaper tier, never up.
+- **Merged with the Model Router idea** (claude-code-templates, MIT; notice in `plugins/dms/LICENSE-THIRD-PARTY.md`). Once the `dms` mod is installed, the installers disable the `model-selector` and `model-router` mods, which would make the same decisions twice, and `--uninstall` turns them back on (`--keep-conflicts` / `-KeepConflicts` to skip). No unlicensed third-party code is included.
+- **Hook goes quiet when the mod runs:** the mod refreshes a heartbeat per session (`~/.config/dms/mod/<session id>`); while that session's heartbeat is fresh, the hook adds no per-prompt reminder there. Other sessions are unaffected. `DMS on/off` and `DMS <task>` still work.
+- **Skill:** trusts only context lines tagged `[dms-mod]` and reports them as `🔀 Switched`, `🔀 Switched back` or `✨ recommended`.
+- **Report:** `dms-report.sh` / `.ps1` read `routes.log` and the mod's own `mod.log`, and show the engine in use, main switches and reverts, recommendations, judge calls, hand picks and subagent decisions.
+- **Tests:** 42 engine tests for the mod (`claude plugin test`), 7 new hook cases, and installer checks for the mod, failed installs, `--no-mod`, `--keep-conflicts` and conflict re-enabling; CI gains a mod job pinned to Claude Code 2.1.325.
+- **Review:** a council and red-team pass on this release fixed the findings above before release.
 
 ## 1.6.0 — 2026-11-14
 Cost-first release from the council review of 1.5.0.

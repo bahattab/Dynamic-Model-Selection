@@ -122,6 +122,14 @@ copy_skill() {
 CONFLICTS="model-selector model-router"
 MARKET_ROOT="$(cd "$SRC/.." && pwd)"
 
+DMS_STATE="${DMS_STATE_DIR:-$HOME/.config/dms}"
+CONFLICT_RECORD="$DMS_STATE/disabled-conflicts"
+
+# Plugin ids (name@marketplace) of a plugin in `claude plugin list` output, whatever the bullet.
+plugin_ids() {
+  printf '%s\n' "$2" | grep -oE "(^|[^A-Za-z0-9._-])$1@[A-Za-z0-9._-]+" | sed -E 's/^[^A-Za-z0-9._-]//' | sort -u || true
+}
+
 install_mod() {
   if ! command -v claude >/dev/null 2>&1; then
     echo "Skipped the DMS mod: the claude CLI is not on PATH (the hook + skill still work)."; return 0
@@ -133,21 +141,35 @@ install_mod() {
   if claude plugin install dms@dynamic-model-selection >/dev/null 2>&1; then
     echo "Installed mod: dms@dynamic-model-selection"
   else
-    echo "DMS mod install FAILED (the hook + skill still work)" >&2
+    # Without the DMS mod running, the other routing mods stay as they are.
+    echo "DMS mod install FAILED (the hook + skill still work; other routing mods left on)" >&2
+    return 0
   fi
   [ "$keep_conflicts" -eq 1 ] && return 0
-  local listed name
+  local listed name id
   listed="$(claude plugin list 2>/dev/null || true)"
   for name in $CONFLICTS; do
-    printf '%s\n' "$listed" | grep -oE "> ${name}@[A-Za-z0-9._-]+" | sed 's/^> //' | while read -r id; do
-      if claude plugin disable "$id" >/dev/null 2>&1; then echo "Disabled conflicting mod: $id"; fi
+    for id in $(plugin_ids "$name" "$listed"); do
+      if claude plugin disable "$id" >/dev/null 2>&1; then
+        echo "Disabled conflicting mod: $id (turned back on by --uninstall)"
+        mkdir -p "$DMS_STATE" && printf '%s\n' "$id" >> "$CONFLICT_RECORD"
+      fi
     done
   done
+  return 0
 }
 
 uninstall_mod() {
   command -v claude >/dev/null 2>&1 || return 0
-  claude plugin uninstall dms@dynamic-model-selection >/dev/null 2>&1 && echo "Removed mod: dms@dynamic-model-selection"
+  if claude plugin uninstall dms@dynamic-model-selection >/dev/null 2>&1; then echo "Removed mod: dms@dynamic-model-selection"; fi
+  if [ -f "$CONFLICT_RECORD" ]; then
+    local id
+    while read -r id; do
+      [ -n "$id" ] || continue
+      if claude plugin enable "$id" >/dev/null 2>&1; then echo "Re-enabled mod: $id"; fi
+    done < <(sort -u "$CONFLICT_RECORD")
+    rm -f "$CONFLICT_RECORD"
+  fi
   return 0
 }
 

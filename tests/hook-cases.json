@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared behaviour table for scripts/dms-hook.sh and scripts/dms-hook.ps1. expect: none | auto | trigger | on | off. state: none | enabled | disabled (before). state_after and log are checked when present. files: extra state files to create (fresh), e.g. mod-active; stale_files: the same, 2 hours old.",
+  "_comment": "Shared behaviour table for scripts/dms-hook.sh and scripts/dms-hook.ps1. expect: none | auto | trigger | on | off. state: none | enabled | disabled (before). state_after and log are checked when present. files: extra state files to create (fresh), e.g. mod/sess-1 (the mod's heartbeat for the default session id sess-1); session: the hook's session_id (default sess-1); stale_files: the same, 2 hours old.",
   "cases": [
     {
       "name": "toggle off",
@@ -167,7 +167,7 @@
       "name": "mod active: long prompt gets nothing",
       "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs",
       "files": [
-        "mod-active"
+        "mod/sess-1"
       ],
       "expect": "none",
       "log": "mod"
@@ -176,7 +176,7 @@
       "name": "mod active: trigger still works",
       "prompt": "DMS review this",
       "files": [
-        "mod-active"
+        "mod/sess-1"
       ],
       "expect": "trigger"
     },
@@ -184,7 +184,7 @@
       "name": "mod active: toggle still works",
       "prompt": "DMS off",
       "files": [
-        "mod-active"
+        "mod/sess-1"
       ],
       "expect": "off",
       "state_after": "disabled"
@@ -193,6 +193,32 @@
       "name": "stale mod heartbeat is ignored",
       "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs",
       "stale_files": [
+        "mod/sess-1"
+      ],
+      "expect": "auto"
+    },
+    {
+      "name": "another session's mod heartbeat is ignored",
+      "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs",
+      "files": [
+        "mod/other-session"
+      ],
+      "expect": "auto"
+    },
+    {
+      "name": "session ids are made safe file names",
+      "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs",
+      "session": "a/b:c",
+      "files": [
+        "mod/a_b_c"
+      ],
+      "expect": "none",
+      "log": "mod"
+    },
+    {
+      "name": "the old shared mod-active file is ignored",
+      "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs",
+      "files": [
         "mod-active"
       ],
       "expect": "auto"

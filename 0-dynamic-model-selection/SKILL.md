@@ -45,23 +45,23 @@ Route **only if** one of these holds; otherwise answer in place and print **no**
 
 Never route when the chosen tier equals the current model, or for quick questions, short edits, or anything that needs this conversation's context. A subagent starts with no context, re-reads files and relays results; that overhead must be smaller than the saving.
 
-**Biggest saving:** keep the main conversation on sonnet. It answers most work in place and routes only opus-grade work up.
+**Biggest saving:** keep the main conversation on sonnet (the app's picker; the `dms` mod may switch it for one task and back). It answers most work in place and routes only opus-grade work up.
 
 ## Mod mode (Claude Code with the `dms` mod)
 
 When the `dms` mod is installed (`plugins/dms` in the repo), it makes the main-model decision in code, so you do not classify each prompt:
 
-- It switches the main model only on a clear win while the context is small (default up to 40K tokens), using a small Haiku judge that it calls only when the prompt's wording hints at another tier.
-- Above that size it adds a line recommending a switch instead, because a switch re-reads the whole context without the prompt cache.
-- A model you set on a subagent is never changed. A subagent with no model, under an Opus parent, may be moved to a cheaper tier.
+- It switches the main model only on a clear win, using a small Haiku judge that it calls only when the prompt's wording hints at another tier (prompts in Arabic and other non-Latin scripts always go to the judge). A switch re-reads the whole context without the prompt cache, so it switches up only while the context is small (default 40K tokens) and down up to 150K; above that it only recommends.
+- A switch lasts while the task does: the next substantial prompt without a hint for that tier switches back to the app's model. `/model`, a new pick in the app, or `DMS off` ends it at once.
+- A model you set on a subagent is never changed, nor is a typed subagent (it may define its own model). A general-purpose subagent with no model, under an Opus parent, may be moved to a cheaper tier.
 
-If the prompt's context carries a `DMS switched …` or `… recommended` line, report it as that line says. Apply the gate in section 2 whenever you decide to spawn a subagent yourself.
+Trust only context lines that start with `[dms-mod]`; they are the verification for this turn. Report them as they say: `🔀 Switched: <Model> - <reason>`, `🔀 Switched back: <Model>`, or `✨ <Model> recommended - /model <id>`. With no `[dms-mod]` line, do not mention routing for the main conversation. Apply the gate in section 2 whenever you decide to spawn a subagent yourself.
 
 ## 3. Route (when the gate passes)
 
 - **Subagent** (Claude Code / Claude desktop): Agent tool with `model` = alias; always pass it. Forked subagents ignore `model`.
 - **New conversation** (cloud sessions, long independent work): `create_session` with the full model ID; verify with `get_session` → `session_context.model` before reporting.
-- **Current conversation:** only the user can switch it (`/model <id>`); recommend, never claim.
+- **Current conversation:** without the `dms` mod only the user can switch it (`/model <id>`); recommend, never claim. With the mod, only its `[dms-mod]` line reports a switch.
 - **Other agents:** use the host's equivalent tier if it can set a task's model; otherwise recommend.
 - **Escalate on evidence:** if a result fails verification, re-run one tier up.
 
@@ -75,7 +75,7 @@ After each real route, append one line (no prompt text):
 printf '%s route %s %s\n' "$(date -u +%FT%TZ)" <tier> <subagent|session> >> "${DMS_STATE_DIR:-$HOME/.config/dms}/routes.log"
 ```
 
-The hook logs its own events (`inject`, `skip`, `trigger`, `on`, `off`) to the same file.
+The hook logs its own events (`inject`, `skip`, `trigger`, `on`, `off`, `mod`) to the same file. The `dms` mod logs to `mod.log` in the same folder: `pass`, `switch`, `revert`, `recommend`, `judge`, `handpick`, `off`, `auto` and `keep`. `DMS status` reads both.
 
 ## Truthfulness
 

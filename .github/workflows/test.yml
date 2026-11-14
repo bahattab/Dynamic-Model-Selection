@@ -58,7 +58,8 @@ jobs:
           node-version: '22'
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
+        # Pinned: the mod API and its test runner are checked against this build.
+        run: npm install -g @anthropic-ai/claude-code@2.1.325 && claude --version
 
       - name: Validate the marketplace and the mod
         run: |

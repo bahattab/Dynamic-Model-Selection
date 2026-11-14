@@ -40,16 +40,18 @@ def run_case(cmd, case):
         if before != "none":
             (state_dir / before).touch()
         for name in case.get("files", []):
+            (state_dir / name).parent.mkdir(parents=True, exist_ok=True)
             (state_dir / name).write_text("1\n")
         for name in case.get("stale_files", []):
             f = state_dir / name
+            f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text("1\n")
             old = time.time() - 7200
             os.utime(f, (old, old))
         env = {k: v for k, v in os.environ.items() if not k.startswith("DMS_")}
         env["DMS_STATE_DIR"] = str(state_dir)
         env.update(case.get("env", {}))
-        payload = json.dumps({"hook_event_name": "UserPromptSubmit", "prompt": case["prompt"]})
+        payload = json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": case.get("session", "sess-1"), "prompt": case["prompt"]})
         proc = subprocess.run(cmd, input=payload.encode("utf-8"), capture_output=True, env=env, timeout=60)
         out = proc.stdout.decode("utf-8", "replace").strip()
         errors = []

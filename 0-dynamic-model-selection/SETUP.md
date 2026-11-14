@@ -35,9 +35,9 @@ The installers add the mod when the `claude` CLI is on PATH and they run from a 
 /plugin install dms --marketplace bahattab/Dynamic-Model-Selection
 ```
 
-The mod switches the main model on a clear win while the context is small, keeps every subagent model the caller sets, and may move an unset subagent of an Opus parent to a cheaper tier. Settings (`/plugin configure dms@dynamic-model-selection`): `switchMain`, `maxSwitchContext` (40000), `minWords` (12), `cooldownPrompts` (3), `upConfidence` (0.6), `downConfidence` (0.75), `routeUnsetSubagents`, `timeoutMs`, and the three tier model ids.
+The mod switches the main model on a clear win while the context is small, switches back when the task is done, keeps every subagent model the caller sets (and every typed subagent), and may move an unset general-purpose subagent of an Opus parent to a cheaper tier. Settings (`/plugin configure dms@dynamic-model-selection`): `switchMain`, `maxSwitchContext` (40000, switching up), `maxSwitchContextDown` (150000, switching down), `minWords` (12), `cooldownPrompts` (3), `upConfidence` (0.6), `downConfidence` (0.75), `routeUnsetSubagents`, `timeoutMs`, and the three tier model ids.
 
-**Other routing mods.** `model-selector` and `model-router` (from other mod packs) make the same decisions and would override DMS, so the installers disable them. `handoff` and `cache-clock` do not conflict.
+**Other routing mods.** `model-selector` and `model-router` (from other mod packs) make the same decisions and would override DMS, so the installers disable them once the `dms` mod is installed, record them in `~/.config/dms/disabled-conflicts`, and turn them back on with `--uninstall`. `handoff` and `cache-clock` do not conflict.
 
 ## 2. Load it (required)
 
