@@ -78,7 +78,7 @@ function Update-Settings([string]$Mode) {
   $json = ConvertTo-Json $data -Depth 20
   $tmp = "$Settings.tmp-dms"
   [System.IO.File]::WriteAllText($tmp, $json + "`n", (New-Object System.Text.UTF8Encoding($false)))
-  if (Test-Path $Settings) { [System.IO.File]::Replace($tmp, $Settings, $null) } else { Move-Item -Force $tmp $Settings }
+  Move-Item -LiteralPath $tmp -Destination $Settings -Force
 }
 
 function Copy-Skill([string]$Root) {

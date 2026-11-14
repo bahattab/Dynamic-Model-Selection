@@ -104,15 +104,19 @@ def main():
         # The registered command line must run and produce the clear-win reminder for a long prompt.
         # shell=True is deliberate: Claude Code runs this exact string through a shell, and the string
         # comes from the installer under test (no outside input).
-        entry = dms_entries(settings)[0]["command"]
-        payload = json.dumps({"prompt": LONG_PROMPT}).encode()
-        proc = subprocess.run(entry, shell=True, input=payload, capture_output=True, env=env, timeout=60)
-        out = proc.stdout.decode(errors="replace").strip()
-        try:
-            ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-        except Exception:
-            ctx = ""
-        check(proc.returncode == 0 and "clear win" in ctx, f"registered hook command runs ({entry})")
+        entries = dms_entries(settings)
+        if entries:
+            entry = entries[0]["command"]
+            payload = json.dumps({"prompt": LONG_PROMPT}).encode()
+            proc = subprocess.run(entry, shell=True, input=payload, capture_output=True, env=env, timeout=60)
+            out = proc.stdout.decode(errors="replace").strip()
+            try:
+                ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+            except Exception:
+                ctx = ""
+            check(proc.returncode == 0 and "clear win" in ctx, f"registered hook command runs ({entry})")
+        else:
+            check(False, "registered hook command runs (no DMS entry found)")
 
         check(run("--no-agents", "--default-off") == 0, "install with default-off exits 0")
         settings = json.loads(settings_path.read_text(encoding="utf-8"))
