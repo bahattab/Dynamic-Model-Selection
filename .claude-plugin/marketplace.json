@@ -1,0 +1,13 @@
+{
+  "name": "dynamic-model-selection",
+  "owner": { "name": "bahattab" },
+  "description": "0 - Dynamic Model Selection (DMS): cost-first Claude model routing for Claude Code.",
+  "plugins": [
+    {
+      "name": "dms",
+      "source": "./plugins/dms",
+      "description": "Cost-first model routing in code: switches the main model only on a clear win while the cache is cheap to lose, keeps every model a caller sets, and routes unset subagents of an Opus parent to a cheaper tier when a small Haiku judge is confident.",
+      "version": "1.7.0"
+    }
+  ]
+}

@@ -10,6 +10,10 @@
     %USERPROFILE%\.claude\hooks\dms-hook.ps1                  automatic-routing hook
     %USERPROFILE%\.claude\settings.json                       UserPromptSubmit entry (merged, backup kept);
                                                               -DefaultOff also sets env DMS_DEFAULT=off
+    dms@dynamic-model-selection                               the DMS mod (routing in code), when the claude CLI is
+                                                              on PATH and this folder sits in a clone of the repo;
+                                                              also disables the model-selector / model-router mods,
+                                                              which conflict with it (-KeepConflicts to skip)
   Removes the legacy "model-selection" skill and "model-routing.sh" hook unless -KeepLegacy is given.
 
 .EXAMPLE
@@ -22,6 +26,8 @@ param(
   [switch]$NoAgents,
   [switch]$NoCommand,
   [switch]$DefaultOff,
+  [switch]$NoMod,
+  [switch]$KeepConflicts,
   [switch]$KeepLegacy,
   [switch]$Uninstall
 )
@@ -93,12 +99,67 @@ function Copy-Skill([string]$Root) {
   Write-Host "Installed skill: $dst"
 }
 
+$Conflicts  = @('model-selector', 'model-router')
+$MarketRoot = Split-Path -Parent $Src
+
+$DmsState       = if ($env:DMS_STATE_DIR) { $env:DMS_STATE_DIR } else { Join-Path $HOME '.config\dms' }
+$ConflictRecord = Join-Path $DmsState 'disabled-conflicts'
+
+# Native commands may write to stderr; under 'Stop' Windows PowerShell 5.1 turns that into an error.
+function Invoke-Claude {
+  $ErrorActionPreference = 'Continue'
+  & claude @args *> $null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Install-Mod {
+  $ErrorActionPreference = 'Continue'
+  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    Write-Host 'Skipped the DMS mod: the claude CLI is not on PATH (the hook + skill still work).'; return
+  }
+  if (-not (Test-Path (Join-Path $MarketRoot '.claude-plugin\marketplace.json')) -or -not (Test-Path (Join-Path $MarketRoot 'plugins\dms'))) {
+    Write-Host 'Skipped the DMS mod: run the installer from a clone of the repository to get it.'; return
+  }
+  $null = Invoke-Claude plugin marketplace add $MarketRoot
+  if (Invoke-Claude plugin install dms@dynamic-model-selection) { Write-Host 'Installed mod: dms@dynamic-model-selection' }
+  else {
+    # Without the DMS mod running, the other routing mods stay as they are.
+    [Console]::Error.WriteLine('DMS mod install FAILED (the hook + skill still work; other routing mods left on)')
+    return
+  }
+  if ($KeepConflicts) { return }
+  $listed = (& claude plugin list 2>$null) -join "`n"
+  foreach ($name in $Conflicts) {
+    $ids = [regex]::Matches($listed, "(?:^|[^A-Za-z0-9._-])($([regex]::Escape($name))@[A-Za-z0-9._-]+)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+    foreach ($id in $ids) {
+      if (Invoke-Claude plugin disable $id) {
+        Write-Host "Disabled conflicting mod: $id (turned back on by -Uninstall)"
+        New-Item -ItemType Directory -Force -Path $DmsState | Out-Null
+        Add-Content -LiteralPath $ConflictRecord -Value $id -Encoding UTF8
+      }
+    }
+  }
+}
+
+function Uninstall-Mod {
+  $ErrorActionPreference = 'Continue'
+  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { return }
+  if (Invoke-Claude plugin uninstall dms@dynamic-model-selection) { Write-Host 'Removed mod: dms@dynamic-model-selection' }
+  if (Test-Path -LiteralPath $ConflictRecord) {
+    foreach ($id in (Get-Content -LiteralPath $ConflictRecord | Where-Object { $_.Trim() } | Sort-Object -Unique)) {
+      if (Invoke-Claude plugin enable $id.Trim()) { Write-Host "Re-enabled mod: $($id.Trim())" }
+    }
+    Remove-Item -LiteralPath $ConflictRecord -Force
+  }
+}
+
 if ($Uninstall) {
   foreach ($p in @((Join-Path $ClaudeDir "skills\$Name"), (Join-Path $AgentsDir "skills\$Name"),
                    (Join-Path $ClaudeDir 'commands\DMS.md'), $HookDst)) {
     if (Test-Path $p) { Remove-Item -Recurse -Force $p }
   }
   if (Test-Path $Settings) { Update-Settings 'remove' }
+  Uninstall-Mod
   Write-Host "DMS uninstalled. Settings backup: $Settings.bak-dms"
   exit 0
 }
@@ -129,6 +190,8 @@ if (-not $NoHook) {
 } elseif (Test-Path $Settings) {
   Update-Settings 'remove'
 }
+
+if (-not $NoMod) { Install-Mod }
 
 $ver = if (Test-Path (Join-Path $Src 'VERSION')) { (Get-Content (Join-Path $Src 'VERSION') -Raw).Trim() } else { 'unknown' }
 Write-Host "Done. Version $ver."

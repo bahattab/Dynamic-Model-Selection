@@ -1,10 +1,10 @@
 # 0 - Dynamic Model Selection (DMS)
 
-**Version 1.6.0** · Agent skill · Trigger: `DMS`
+**Version 1.7.0** · Agent skill + Claude Code mod · Trigger: `DMS`
 
 DMS cuts model cost by sending a task to a different Claude model **only when that clearly pays off**: Opus for architecture and hard-to-reverse decisions in a Sonnet conversation, a cheaper model for a large read-heavy scan. Everything else is answered in place, because a subagent starts with no context and its overhead often costs more than it saves. Every real route is reported and logged.
 
-It is a standard `SKILL.md` skill, so any Markdown-capable agent can use it. Running work on another model depends on what the host supports; where that isn't possible, DMS recommends instead of claiming a switch.
+In Claude Code, the `dms` mod makes these decisions in code, so the main model spends no tokens on routing. Everywhere else it is a standard `SKILL.md` skill that any Markdown-capable agent can use. Running work on another model depends on what the host supports; where that isn't possible, DMS recommends instead of claiming a switch.
 
 ---
 
@@ -26,6 +26,24 @@ It is a standard `SKILL.md` skill, so any Markdown-capable agent can use it. Run
 ---
 
 ## How it works
+
+**With the `dms` mod (Claude Code):**
+
+```
+your prompt
+   │
+   ├─ < 12 words, or no wording hint for another tier .... nothing, no cost
+   ├─ hint names another tier (or non-Latin script) ....... one small Haiku judge call
+   │      confident (≥ 0.6 up / ≥ 0.75 down) and context ≤ 40K up / 150K down → switch the main model
+   │      confident but context larger ......................... one line recommending /model
+   ├─ later prompt with no hint for the switched tier ...... switch back to the app's model
+   ├─ /model, a new pick in the app, or DMS off ............ the switch ends at once
+   └─ subagent spawn
+          model set by the caller, or a typed agent ...... never changed
+          no model, general-purpose, Opus parent ......... judge may pick a cheaper tier
+```
+
+**Without the mod (other hosts, or the hook only):**
 
 ```
 your prompt
@@ -62,6 +80,14 @@ Case-insensitive. Other names that load the skill: `0 - Dynamic Model Selection`
 
 ## Install
 
+**The `dms` mod (Claude Code):**
+
+```
+/plugin install dms --marketplace bahattab/Dynamic-Model-Selection
+```
+
+The installers below add it for you when the `claude` CLI is on PATH.
+
 **macOS / Linux (Claude Code, Claude desktop)**
 
 ```bash
@@ -89,14 +115,14 @@ The installer puts:
 | `~/.claude/hooks/dms-hook.sh` (`.ps1` on Windows) | Automatic-routing hook |
 | `~/.claude/settings.json` | `UserPromptSubmit` entry, merged with existing settings; backup at `settings.json.bak-dms` |
 
-Options: `--no-hook`, `--no-agents`, `--no-command`, `--default-off`, `--keep-legacy`, `--uninstall` (PowerShell: `-NoHook`, `-NoAgents`, `-NoCommand`, `-DefaultOff`, `-KeepLegacy`, `-Uninstall`).
+Options: `--no-hook`, `--no-agents`, `--no-command`, `--no-mod`, `--keep-conflicts`, `--default-off`, `--keep-legacy`, `--uninstall` (PowerShell: `-NoHook`, `-NoAgents`, `-NoCommand`, `-NoMod`, `-KeepConflicts`, `-DefaultOff`, `-KeepLegacy`, `-Uninstall`).
 
 Then start a new session, or open `/hooks` once, so Claude Code loads the skill and hook.
 
 **Claude Code cloud sessions (claude.ai/code).** Containers are rebuilt per session. Add this to the environment's setup script; it is pinned to a release tag for safety:
 
 ```bash
-if git clone -q --depth 1 --branch v1.6.0 https://github.com/bahattab/Dynamic-Model-Selection /tmp/dms; then
+if git clone -q --depth 1 --branch v1.7.0 https://github.com/bahattab/Dynamic-Model-Selection /tmp/dms; then
   bash /tmp/dms/0-dynamic-model-selection/scripts/install.sh || echo "DMS install FAILED" >&2
 else
   echo "DMS download FAILED" >&2
@@ -128,13 +154,17 @@ Full per-host steps and settings: [`0-dynamic-model-selection/SETUP.md`](0-dynam
 
 ## Measuring savings
 
-The hook and the model write one line per event to `~/.config/dms/routes.log` (`inject`, `skip`, `trigger`, `on`, `off`, `route <tier> <subagent|session>`), never prompt text. `DMS status` summarises it with `scripts/dms-report.sh` (Windows: `scripts\dms-report.ps1`), including the share of prompts that were actually routed.
+The hook and the model write one line per event to `~/.config/dms/routes.log` (`inject`, `skip`, `trigger`, `on`, `off`, `mod`, `route <tier> <subagent|session>`); the mod writes `mod.log` (`pass`, `switch`, `revert`, `recommend`, `judge`, `handpick`, `off`, `auto`, `keep`). Neither holds prompt text. `DMS status` summarises it with `scripts/dms-report.sh` (Windows: `scripts\dms-report.ps1`), including the share of prompts that were actually routed.
+
+## Other routing mods
+
+`model-selector` and `model-router` (from other Claude Code mod packs) decide the same things and would override DMS: Model Router changes even a subagent model DMS chose, and Model Selector runs a Sonnet call on every prompt. The installers disable both, only after the `dms` mod installed, and `--uninstall` turns them back on (`--keep-conflicts` to skip). `handoff` and `cache-clock` do not conflict. The `dms` mod adapts Model Router's judge prompt from claude-code-templates (MIT; see `plugins/dms/LICENSE-THIRD-PARTY.md`).
 
 ## Host support
 
 | Host | Subagent on chosen model | New conversation on chosen model | Auto-routing hook |
 |---|---|---|---|
-| Claude Code / Claude desktop | Yes (Agent tool `model`) | Cloud sessions (`create_session`) | Yes |
+| Claude Code / Claude desktop | Yes (Agent tool `model`; the mod keeps it) | Cloud sessions (`create_session`) | Yes; with the mod, the main model switches in code |
 | claude.ai / Claude apps | Host-dependent | No | No |
 | Other agents | If the host can set a task's model | Host-dependent | No |
 
@@ -152,6 +182,12 @@ The hook and the model write one line per event to `~/.config/dms/routes.log` (`
     ├── install.sh, install.ps1        installers (+ uninstall)
     ├── dms-hook.sh, dms-hook.ps1      UserPromptSubmit hooks (same behaviour)
     └── dms-report.sh, dms-report.ps1  route-log summary
+plugins/dms/                the Claude Code mod
+├── hooks/register.ts       prompt.submit, turn.step, agent.spawn hooks
+├── hooks/policy.ts         pure rules: pre-filter, judge prompt, clear-win gate, cache guard
+├── tests/dms.test.ts       engine tests (claude plugin test)
+└── LICENSE-THIRD-PARTY.md  MIT notice for the adapted Model Router logic
+.claude-plugin/marketplace.json   marketplace for /plugin install
 tests/
 ├── hook-cases.json       shared behaviour table for both hooks
 ├── run_hook_tests.py     runs the table against one hook
@@ -171,11 +207,15 @@ python3 tests/run_hook_tests.py bash 0-dynamic-model-selection/scripts/dms-hook.
 python3 tests/test_install.py bash
 ```
 
+```bash
+claude plugin test plugins/dms
+```
+
 On Windows: `python tests\run_hook_tests.py powershell -NoProfile -ExecutionPolicy Bypass -File 0-dynamic-model-selection\scripts\dms-hook.ps1` and `python tests\test_install.py powershell`. CI runs all of these on every pull request.
 
 ## Limitations
 
-- **The running conversation's own model doesn't change.** DMS runs work on other models through subagents or new conversations; only you can switch the current conversation (`/model`).
+- **Switching the conversation's model needs the mod.** Without it, DMS runs work on other models through subagents or new conversations and recommends `/model`. With it, the switch costs one cache re-read, which is why it only happens while the context is small.
 - **The gate is followed by the model, not enforced by code.** The hook only filters short prompts and reminds the model of the rule; the route log shows whether routing stays rare.
 - **Hook needs a reload** the first time (new session or `/hooks`).
 

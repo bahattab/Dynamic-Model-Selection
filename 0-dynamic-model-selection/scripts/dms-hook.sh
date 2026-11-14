@@ -9,6 +9,8 @@
 #
 # State: ${DMS_STATE_DIR:-$HOME/.config/dms}/enabled or /disabled; neither = DMS_DEFAULT (on|off, default on).
 # Log:   routes.log in the same folder, one line per event, never the prompt text.
+# Mod:   when the DMS mod refreshed mod/<session_id> in the last 30 minutes, automatic mode adds
+#        nothing for that session (the mod routes it in code); other sessions are unaffected.
 # Behaviour is defined by tests/hook-cases.json and must match dms-hook.ps1.
 set -u
 
@@ -19,13 +21,20 @@ SKILL="0-dynamic-model-selection"
 
 input="$(cat 2>/dev/null || true)"
 prompt=""
+session=""
 if command -v jq >/dev/null 2>&1; then
   prompt="$(printf '%s' "$input" | jq -r '.prompt // empty' 2>/dev/null || true)"
+  session="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
 elif command -v python3 >/dev/null 2>&1; then
   prompt="$(printf '%s' "$input" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("prompt",""))
 except Exception: pass' 2>/dev/null || true)"
+  session="$(printf '%s' "$input" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("session_id",""))
+except Exception: pass' 2>/dev/null || true)"
 fi
+# Same file name rule as the mod: anything but letters, digits, . _ - becomes _.
+session="$(printf '%s' "$session" | tr -c 'A-Za-z0-9._-' '_')"
 
 # Lowercase, trim surrounding whitespace, drop one leading slash.
 lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
@@ -73,6 +82,14 @@ else
   esac
 fi
 [ "$mode" = off ] && exit 0
+
+# The DMS mod (plugins/dms) routes this session in code when it runs; it refreshes its heartbeat
+# on every prompt and every turn.
+beat="$STATE_DIR/mod/$session"
+if [ -n "$session" ] && [ -f "$beat" ] && [ -n "$(find "$beat" -mmin -30 2>/dev/null)" ]; then
+  log mod
+  exit 0
+fi
 
 words="$(printf '%s' "$prompt" | wc -w | tr -d '[:space:]')"
 if [ "${words:-0}" -lt "$MIN_WORDS" ]; then

@@ -47,6 +47,28 @@ jobs:
       - name: Installer (bash)
         run: python3 tests/test_install.py bash
 
+  mod:
+    name: DMS mod (validate + engine tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code
+        # Pinned: the mod API and its test runner are checked against this build.
+        run: npm install -g @anthropic-ai/claude-code@2.1.325 && claude --version
+
+      - name: Validate the marketplace and the mod
+        run: |
+          claude plugin validate .
+          claude plugin validate plugins/dms
+
+      - name: Mod tests
+        run: claude plugin test plugins/dms
+
   windows:
     name: Windows (PowerShell 5.1 + 7)
     runs-on: windows-latest

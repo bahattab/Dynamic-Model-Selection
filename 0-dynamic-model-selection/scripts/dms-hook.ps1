@@ -8,6 +8,8 @@
 #
 # State: $env:DMS_STATE_DIR or %USERPROFILE%\.config\dms, files 'enabled' / 'disabled'; neither = DMS_DEFAULT (on|off, default on).
 # Log:   routes.log in the same folder, one line per event, never the prompt text.
+# Mod:   when the DMS mod refreshed mod\<session_id> in the last 30 minutes, automatic mode adds
+#        nothing for that session (the mod routes it in code); other sessions are unaffected.
 # Behaviour is defined by tests/hook-cases.json and must match dms-hook.sh.
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -17,10 +19,17 @@ if ($env:DMS_MIN_WORDS -match '^\d+$') { $minWords = [int]$env:DMS_MIN_WORDS }
 $skill = '0-dynamic-model-selection'
 
 $prompt = ''
+$session = ''
 try {
   $raw = [Console]::In.ReadToEnd()
-  if ($raw) { $prompt = [string]((ConvertFrom-Json $raw).prompt) }
-} catch { $prompt = '' }
+  if ($raw) {
+    $json = ConvertFrom-Json $raw
+    $prompt = [string]$json.prompt
+    $session = [string]$json.session_id
+  }
+} catch { $prompt = ''; $session = '' }
+# Same file name rule as the mod: anything but letters, digits, . _ - becomes _.
+$session = $session -replace '[^A-Za-z0-9._-]', '_'
 
 $lower = $prompt.ToLowerInvariant().Trim()
 if ($lower.StartsWith('/')) { $lower = $lower.Substring(1) }
@@ -66,6 +75,14 @@ elseif (Test-Path (Join-Path $stateDir 'enabled')) { $mode = 'on' }
 elseif ($env:DMS_DEFAULT -and ($env:DMS_DEFAULT.ToLowerInvariant() -in @('off', '0', 'false', 'no'))) { $mode = 'off' }
 else { $mode = 'on' }
 if ($mode -eq 'off') { exit 0 }
+
+# The DMS mod (plugins/dms) routes this session in code when it runs; it refreshes its heartbeat
+# on every prompt and every turn.
+$beat = if ($session) { Join-Path (Join-Path $stateDir 'mod') $session } else { '' }
+if ($beat -and (Test-Path -LiteralPath $beat) -and ((Get-Item -LiteralPath $beat).LastWriteTime -gt (Get-Date).AddMinutes(-30))) {
+  Write-Log 'mod'
+  exit 0
+}
 
 $words = @($prompt -split '\s+' | Where-Object { $_ -ne '' }).Count
 if ($words -lt $minWords) {
