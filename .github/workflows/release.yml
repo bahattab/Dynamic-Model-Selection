@@ -2,6 +2,7 @@
 # The release is tagged vX.Y.Z, takes its notes from the matching CHANGELOG.md section,
 # and attaches "0 - Dynamic Model Selection.skill" (a zip of the skill folder).
 # A version that already has a tag is skipped, so re-runs are safe.
+# The Test workflow must pass first.
 name: Release
 
 on:
@@ -19,7 +20,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   release:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Check out

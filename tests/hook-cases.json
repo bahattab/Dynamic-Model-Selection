@@ -1,0 +1,31 @@
+{
+  "_comment": "Shared behaviour table for scripts/dms-hook.sh and scripts/dms-hook.ps1. expect: none | auto | trigger | on | off. state: none | enabled | disabled (before). state_after and log are checked when present.",
+  "cases": [
+    {"name": "toggle off", "prompt": "DMS off", "expect": "off", "state_after": "disabled", "log": "off"},
+    {"name": "toggle off with period", "prompt": "dms off.", "expect": "off", "state_after": "disabled"},
+    {"name": "toggle off with slash and spaces", "prompt": "  /DMS OFF  ", "expect": "off", "state_after": "disabled"},
+    {"name": "toggle on", "prompt": "DMS on", "state": "disabled", "expect": "on", "state_after": "enabled", "log": "on"},
+    {"name": "toggle on with bang", "prompt": "dms on!", "state": "disabled", "expect": "on", "state_after": "enabled"},
+    {"name": "off with trailing words is a trigger, not a toggle", "prompt": "DMS off, please", "expect": "trigger", "state_after": "none"},
+    {"name": "off-topic is a trigger, not a toggle", "prompt": "dms off-topic question", "expect": "trigger", "state_after": "none"},
+    {"name": "on-call is a trigger, not a toggle", "prompt": "DMS on-call summary", "state": "disabled", "expect": "trigger", "state_after": "disabled"},
+    {"name": "bare trigger", "prompt": "DMS", "expect": "trigger", "log": "trigger"},
+    {"name": "slash trigger", "prompt": "/DMS status", "expect": "trigger"},
+    {"name": "trigger with task", "prompt": "dms review this module", "expect": "trigger"},
+    {"name": "trigger with colon", "prompt": "DMS: plan the migration", "expect": "trigger"},
+    {"name": "trigger works when routing is off", "prompt": "DMS list files", "state": "disabled", "expect": "trigger"},
+    {"name": "dms-hook word is not a trigger", "prompt": "dms-hook.ps1 is broken on my machine, can you look at the error message and fix it", "expect": "auto"},
+    {"name": "possessive is not a trigger", "prompt": "dms's", "expect": "none"},
+    {"name": "short prompt skipped", "prompt": "thanks", "expect": "none", "log": "skip"},
+    {"name": "short task skipped", "prompt": "fix the typo in README", "expect": "none", "log": "skip"},
+    {"name": "long prompt gets reminder", "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs", "expect": "auto", "log": "inject"},
+    {"name": "long prompt silent when disabled", "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs", "state": "disabled", "expect": "none"},
+    {"name": "long prompt silent when default off", "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs", "env": {"DMS_DEFAULT": "off"}, "expect": "none"},
+    {"name": "enabled file beats default off", "prompt": "Design the event sourcing architecture for the orders and payments services and explain the tradeoffs", "state": "enabled", "env": {"DMS_DEFAULT": "off"}, "expect": "auto"},
+    {"name": "custom word threshold", "prompt": "fix the typo in README", "env": {"DMS_MIN_WORDS": "3"}, "expect": "auto"},
+    {"name": "invalid threshold falls back", "prompt": "fix the typo in README", "env": {"DMS_MIN_WORDS": "abc"}, "expect": "none"},
+    {"name": "empty prompt", "prompt": "", "expect": "none"},
+    {"name": "non-ascii prompt", "prompt": "صمّم بنية النظام الكاملة لخدمات الطلبات والمدفوعات مع شرح المفاضلات بين الخيارات المختلفة بالتفصيل", "expect": "auto"},
+    {"name": "hostile quotes stay valid json", "prompt": "DMS \" }} \\ injection", "expect": "trigger"}
+  ]
+}
