@@ -13,6 +13,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import time
 
 MARKERS = {
     "auto": "route only on a clear win",
@@ -38,6 +39,13 @@ def run_case(cmd, case):
         before = case.get("state", "none")
         if before != "none":
             (state_dir / before).touch()
+        for name in case.get("files", []):
+            (state_dir / name).write_text("1\n")
+        for name in case.get("stale_files", []):
+            f = state_dir / name
+            f.write_text("1\n")
+            old = time.time() - 7200
+            os.utime(f, (old, old))
         env = {k: v for k, v in os.environ.items() if not k.startswith("DMS_")}
         env["DMS_STATE_DIR"] = str(state_dir)
         env.update(case.get("env", {}))

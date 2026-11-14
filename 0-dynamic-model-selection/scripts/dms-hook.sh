@@ -9,6 +9,7 @@
 #
 # State: ${DMS_STATE_DIR:-$HOME/.config/dms}/enabled or /disabled; neither = DMS_DEFAULT (on|off, default on).
 # Log:   routes.log in the same folder, one line per event, never the prompt text.
+# Mod:   when the DMS mod refreshed mod-active in the last 30 minutes, automatic mode adds nothing.
 # Behaviour is defined by tests/hook-cases.json and must match dms-hook.ps1.
 set -u
 
@@ -73,6 +74,12 @@ else
   esac
 fi
 [ "$mode" = off ] && exit 0
+
+# The DMS mod (plugins/dms) routes in code when it runs; it refreshes mod-active on every prompt.
+if [ -f "$STATE_DIR/mod-active" ] && [ -n "$(find "$STATE_DIR/mod-active" -mmin -30 2>/dev/null)" ]; then
+  log mod
+  exit 0
+fi
 
 words="$(printf '%s' "$prompt" | wc -w | tr -d '[:space:]')"
 if [ "${words:-0}" -lt "$MIN_WORDS" ]; then

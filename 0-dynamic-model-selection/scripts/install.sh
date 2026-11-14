@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install 0 - Dynamic Model Selection (DMS) for Claude Code and other agents (macOS / Linux).
 #
-# Usage: bash scripts/install.sh [--no-hook] [--no-agents] [--no-command] [--default-off] [--keep-legacy] [--uninstall]
+# Usage: bash scripts/install.sh [--no-hook] [--no-agents] [--no-command] [--no-mod] [--keep-conflicts]
+#                                [--default-off] [--keep-legacy] [--uninstall]
 #
 # Installs:
 #   ~/.claude/skills/0-dynamic-model-selection/   Claude Code / Claude desktop skill
@@ -10,6 +11,10 @@
 #   ~/.claude/hooks/dms-hook.sh                   automatic-routing hook
 #   ~/.claude/settings.json                       UserPromptSubmit entry (merged, backup kept);
 #                                                 --default-off also sets env DMS_DEFAULT=off
+#   dms@dynamic-model-selection                   the DMS mod (routing in code), when the claude CLI is
+#                                                 on PATH and this folder sits in a clone of the repo;
+#                                                 also disables model-selector / model-router mods,
+#                                                 which conflict with it (--keep-conflicts to skip)
 # Removes the legacy "model-selection" skill and "model-routing.sh" hook from earlier versions
 # unless --keep-legacy is given.
 set -euo pipefail
@@ -21,16 +26,18 @@ AGENTS_DIR="$HOME/.agents"
 HOOK_DST="$CLAUDE_DIR/hooks/dms-hook.sh"
 SETTINGS="$CLAUDE_DIR/settings.json"
 
-do_hook=1; do_agents=1; do_command=1; remove_legacy=1; uninstall=0; default_off=0
+do_hook=1; do_agents=1; do_command=1; do_mod=1; keep_conflicts=0; remove_legacy=1; uninstall=0; default_off=0
 for arg in "$@"; do
   case "$arg" in
     --no-hook) do_hook=0 ;;
     --no-agents) do_agents=0 ;;
     --no-command) do_command=0 ;;
     --default-off) default_off=1 ;;
+    --no-mod) do_mod=0 ;;
+    --keep-conflicts) keep_conflicts=1 ;;
     --keep-legacy) remove_legacy=0 ;;
     --uninstall) uninstall=1 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -111,9 +118,43 @@ copy_skill() {
   echo "Installed skill: $dst"
 }
 
+# Mods that would fight DMS over the same model decision (see README "Other routing mods").
+CONFLICTS="model-selector model-router"
+MARKET_ROOT="$(cd "$SRC/.." && pwd)"
+
+install_mod() {
+  if ! command -v claude >/dev/null 2>&1; then
+    echo "Skipped the DMS mod: the claude CLI is not on PATH (the hook + skill still work)."; return 0
+  fi
+  if [ ! -f "$MARKET_ROOT/.claude-plugin/marketplace.json" ] || [ ! -d "$MARKET_ROOT/plugins/dms" ]; then
+    echo "Skipped the DMS mod: run the installer from a clone of the repository to get it."; return 0
+  fi
+  claude plugin marketplace add "$MARKET_ROOT" >/dev/null 2>&1 || true
+  if claude plugin install dms@dynamic-model-selection >/dev/null 2>&1; then
+    echo "Installed mod: dms@dynamic-model-selection"
+  else
+    echo "DMS mod install FAILED (the hook + skill still work)" >&2
+  fi
+  [ "$keep_conflicts" -eq 1 ] && return 0
+  local listed name
+  listed="$(claude plugin list 2>/dev/null || true)"
+  for name in $CONFLICTS; do
+    printf '%s\n' "$listed" | grep -oE "> ${name}@[A-Za-z0-9._-]+" | sed 's/^> //' | while read -r id; do
+      if claude plugin disable "$id" >/dev/null 2>&1; then echo "Disabled conflicting mod: $id"; fi
+    done
+  done
+}
+
+uninstall_mod() {
+  command -v claude >/dev/null 2>&1 || return 0
+  claude plugin uninstall dms@dynamic-model-selection >/dev/null 2>&1 && echo "Removed mod: dms@dynamic-model-selection"
+  return 0
+}
+
 if [ "$uninstall" -eq 1 ]; then
   rm -rf "$CLAUDE_DIR/skills/$NAME" "$AGENTS_DIR/skills/$NAME" "$CLAUDE_DIR/commands/DMS.md" "$HOOK_DST"
   [ -f "$SETTINGS" ] && update_settings remove
+  uninstall_mod
   echo "DMS uninstalled. Settings backup: $SETTINGS.bak-dms"
   exit 0
 fi
@@ -138,6 +179,8 @@ if [ "$do_hook" -eq 1 ]; then
 else
   [ -f "$SETTINGS" ] && update_settings remove
 fi
+
+[ "$do_mod" -eq 1 ] && install_mod
 
 echo "Done. Version $(cat "$SRC/VERSION" 2>/dev/null || echo unknown)."
 echo "Start a new session (or open /hooks once) so Claude Code loads the skill and hook."

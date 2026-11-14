@@ -1,0 +1,22 @@
+{
+  "name": "dms",
+  "version": "1.7.0",
+  "description": "0 - Dynamic Model Selection as a Claude Code mod: cost-first model routing in code. Switches the main model only on a clear win while the cache is cheap to lose, keeps every model a caller sets, and routes unset subagents of an Opus parent to a cheaper tier when a small Haiku judge is confident.",
+  "author": { "name": "bahattab" },
+  "repository": "https://github.com/bahattab/Dynamic-Model-Selection",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "switchMain": { "type": "boolean", "title": "Switch the main model", "description": "Switch the main conversation's model on a clear win. Off: recommend only.", "default": true },
+    "maxSwitchContext": { "type": "number", "title": "Largest context to switch at", "description": "Above this many context tokens a switch would re-read too much without the cache, so DMS only recommends.", "default": 40000 },
+    "minWords": { "type": "number", "title": "Shortest prompt considered", "description": "Prompts with fewer words are never judged.", "default": 12 },
+    "cooldownPrompts": { "type": "number", "title": "Prompts between switches", "description": "After a switch, the next prompts are not judged, so the model does not flip back and forth.", "default": 3 },
+    "upConfidence": { "type": "number", "title": "Confidence to move up", "description": "How sure the judge must be to move to a higher tier.", "default": 0.6 },
+    "downConfidence": { "type": "number", "title": "Confidence to move down", "description": "How sure the judge must be to move to a lower tier.", "default": 0.75 },
+    "routeUnsetSubagents": { "type": "boolean", "title": "Route unset subagents", "description": "When a subagent names no model and the parent runs on the deep tier, let the judge pick a cheaper tier.", "default": true },
+    "timeoutMs": { "type": "number", "title": "Judge time limit (ms)", "description": "After this, the prompt or spawn goes ahead unchanged.", "default": 6000 },
+    "fastModel": { "type": "string", "title": "Fast tier", "description": "Model id for the fast tier.", "default": "claude-haiku-5-5" },
+    "balancedModel": { "type": "string", "title": "Balanced tier", "description": "Model id for the balanced tier.", "default": "claude-sonnet-5-5" },
+    "deepModel": { "type": "string", "title": "Deep tier", "description": "Model id for the deep tier.", "default": "claude-opus-5-5" }
+  }
+}

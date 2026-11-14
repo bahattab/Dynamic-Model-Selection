@@ -9,7 +9,7 @@ description: |
   savings ("DMS status"). Portable to any Markdown-capable agent; switching models depends
   on host support.
 metadata:
-  version: 1.6.0
+  version: 1.7.0
   display-name: 0 - Dynamic Model Selection
   trigger: DMS
   legacy-aliases: model-selection, sk-dynamic-routing
@@ -46,6 +46,16 @@ Route **only if** one of these holds; otherwise answer in place and print **no**
 Never route when the chosen tier equals the current model, or for quick questions, short edits, or anything that needs this conversation's context. A subagent starts with no context, re-reads files and relays results; that overhead must be smaller than the saving.
 
 **Biggest saving:** keep the main conversation on sonnet. It answers most work in place and routes only opus-grade work up.
+
+## Mod mode (Claude Code with the `dms` mod)
+
+When the `dms` mod is installed (`plugins/dms` in the repo), it makes the main-model decision in code, so you do not classify each prompt:
+
+- It switches the main model only on a clear win while the context is small (default up to 40K tokens), using a small Haiku judge that it calls only when the prompt's wording hints at another tier.
+- Above that size it adds a line recommending a switch instead, because a switch re-reads the whole context without the prompt cache.
+- A model you set on a subagent is never changed. A subagent with no model, under an Opus parent, may be moved to a cheaper tier.
+
+If the prompt's context carries a `DMS switched …` or `… recommended` line, report it as that line says. Apply the gate in section 2 whenever you decide to spawn a subagent yourself.
 
 ## 3. Route (when the gate passes)
 

@@ -8,7 +8,9 @@ Usage:
 
 Checks: install twice is idempotent, other settings and hooks survive (including single-item
 arrays), a backup is kept, legacy files are removed, the registered hook command actually runs,
---default-off / -DefaultOff sets env DMS_DEFAULT, and uninstall leaves the other settings intact.
+--default-off / -DefaultOff sets env DMS_DEFAULT, the DMS mod is installed and the conflicting
+model-selector / model-router mods are disabled (through a fake `claude` CLI that records its calls),
+and uninstall leaves the other settings intact.
 """
 import json
 import os
@@ -74,7 +76,21 @@ def main():
         settings_path = claude / "settings.json"
         settings_path.write_text(json.dumps(SEED_SETTINGS, indent=2), encoding="utf-8")
 
-        env = dict(os.environ, CLAUDE_CONFIG_DIR=str(claude), HOME=str(tmp / "home"), DMS_STATE_DIR=str(tmp / "state"))
+        bindir = tmp / "bin"
+        bindir.mkdir()
+        calls = tmp / "claude-calls.log"
+        listing = "  > model-router@claude-model-selector\n  > model-selector@claude-model-selector\n  > handoff@claude-model-selector"
+        if os.name == "nt":
+            lines = ["@echo off", 'echo %*>>"%FAKE_CLAUDE_LOG%"', 'if "%1 %2"=="plugin list" (']
+            lines += [f"  echo {l.replace('>', '^>')}" for l in listing.split("\n")]
+            lines += [")", "exit /b 0"]
+            (bindir / "claude.cmd").write_text("\r\n".join(lines) + "\r\n", encoding="ascii")
+        else:
+            fake = bindir / "claude"
+            fake.write_text('#!/bin/sh\necho "$*" >> "$FAKE_CLAUDE_LOG"\n[ "$1 $2" = "plugin list" ] && printf \'%s\\n\' "' + listing.replace("\n", "\\n") + '"\nexit 0\n', encoding="utf-8")
+            fake.chmod(0o755)
+        env = dict(os.environ, CLAUDE_CONFIG_DIR=str(claude), HOME=str(tmp / "home"), DMS_STATE_DIR=str(tmp / "state"),
+                   FAKE_CLAUDE_LOG=str(calls), PATH=str(bindir) + os.pathsep + os.environ.get("PATH", ""))
         (tmp / "home").mkdir()
 
         def run(*flags):
@@ -100,6 +116,11 @@ def main():
         installed = claude / "skills" / NAME
         check((installed / "SKILL.md").exists() and (installed / "references" / "guide.md").exists(), "skill and reference guide installed")
         check((claude / "commands" / "DMS.md").exists(), "/DMS command installed")
+        made = calls.read_text(encoding="utf-8", errors="replace") if calls.exists() else ""
+        check("plugin marketplace add" in made and "plugin install dms@dynamic-model-selection" in made, "DMS mod installed through the claude CLI")
+        check("plugin disable model-router@claude-model-selector" in made and "plugin disable model-selector@claude-model-selector" in made,
+              "conflicting model-router and model-selector mods disabled")
+        check("handoff@claude-model-selector" not in made.replace("plugin list", ""), "non-conflicting mods left alone")
 
         # The registered command line must run and produce the clear-win reminder for a long prompt.
         # shell=True is deliberate: Claude Code runs this exact string through a shell, and the string
@@ -129,6 +150,8 @@ def main():
         commands = [h["command"] for g in settings.get("hooks", {}).get("UserPromptSubmit", []) for h in g["hooks"]]
         check(commands == ["echo other"], "uninstall keeps the other hook")
         check(not installed.exists() and not (claude / "commands" / "DMS.md").exists(), "uninstall removes skill and command")
+        made = calls.read_text(encoding="utf-8", errors="replace")
+        check("plugin uninstall dms@dynamic-model-selection" in made, "uninstall removes the DMS mod")
 
     print(f"\n{'all checks passed' if not check.failures else str(check.failures) + ' check(s) failed'} ({kind})")
     return 1 if check.failures else 0

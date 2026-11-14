@@ -1,5 +1,17 @@
 # Changelog — 0 - Dynamic Model Selection (DMS)
 
+## 1.7.0 — 2026-11-14
+Routing moves into code, so the main model spends no tokens on it.
+- **New `dms` mod** (`plugins/dms`, installed from this repo's marketplace): a Claude Code mod that makes the main-model decision in code.
+  - Free pre-filter first (word count, then wording hints); a small Haiku judge (≤ 60 output tokens) runs only when the hint names a different tier.
+  - Switches the main model automatically on a clear win (confidence ≥ 0.6 up, ≥ 0.75 down) and only while the context is ≤ 40K tokens, so losing the prompt cache stays cheap; above that it recommends `/model` instead.
+  - A 3-prompt cooldown prevents flip-flopping, and a hand pick in the app always wins.
+- **Subagent conflict fixed:** a model the caller sets is never changed. Only a subagent with no model, under an Opus parent, may move to a cheaper tier, never up.
+- **Merged with the Model Router idea** (claude-code-templates, MIT; notice in `plugins/dms/LICENSE-THIRD-PARTY.md`). The installers disable the `model-selector` and `model-router` mods, which would make the same decisions twice (`--keep-conflicts` / `-KeepConflicts` to skip). No unlicensed third-party code is included.
+- **Hook goes quiet when the mod runs:** the mod refreshes `~/.config/dms/mod-active`; while it is fresh, the hook adds no per-prompt reminder. `DMS on/off` and `DMS <task>` still work.
+- **Report:** `dms-report.sh` / `.ps1` show the engine in use, main switches, recommendations, judge calls, hand picks and subagent decisions.
+- **Tests:** 18 engine tests for the mod (`claude plugin test`), 4 new hook cases, and installer checks for the mod and conflict handling; CI gains a mod job.
+
 ## 1.6.0 — 2026-11-14
 Cost-first release from the council review of 1.5.0.
 - **Clear-win gate:** answer in place by default; route only when the needed tier differs from the current model and the task is large or opus-grade. Same-tier delegation is never done.

@@ -8,6 +8,7 @@
 #
 # State: $env:DMS_STATE_DIR or %USERPROFILE%\.config\dms, files 'enabled' / 'disabled'; neither = DMS_DEFAULT (on|off, default on).
 # Log:   routes.log in the same folder, one line per event, never the prompt text.
+# Mod:   when the DMS mod refreshed mod-active in the last 30 minutes, automatic mode adds nothing.
 # Behaviour is defined by tests/hook-cases.json and must match dms-hook.sh.
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -66,6 +67,13 @@ elseif (Test-Path (Join-Path $stateDir 'enabled')) { $mode = 'on' }
 elseif ($env:DMS_DEFAULT -and ($env:DMS_DEFAULT.ToLowerInvariant() -in @('off', '0', 'false', 'no'))) { $mode = 'off' }
 else { $mode = 'on' }
 if ($mode -eq 'off') { exit 0 }
+
+# The DMS mod (plugins/dms) routes in code when it runs; it refreshes mod-active on every prompt.
+$modActive = Join-Path $stateDir 'mod-active'
+if ((Test-Path $modActive) -and ((Get-Item $modActive).LastWriteTime -gt (Get-Date).AddMinutes(-30))) {
+  Write-Log 'mod'
+  exit 0
+}
 
 $words = @($prompt -split '\s+' | Where-Object { $_ -ne '' }).Count
 if ($words -lt $minWords) {
