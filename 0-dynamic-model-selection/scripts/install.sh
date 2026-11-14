@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Install 0 - Dynamic Model Selection (DMS) for Claude Code and other agents (macOS / Linux).
 #
-# Usage: bash scripts/install.sh [--no-hook] [--no-agents] [--no-command] [--keep-legacy] [--uninstall]
+# Usage: bash scripts/install.sh [--no-hook] [--no-agents] [--no-command] [--default-off] [--keep-legacy] [--uninstall]
 #
 # Installs:
 #   ~/.claude/skills/0-dynamic-model-selection/   Claude Code / Claude desktop skill
 #   ~/.agents/skills/0-dynamic-model-selection/   shared skills folder for other agents
 #   ~/.claude/commands/DMS.md                     /DMS slash command
 #   ~/.claude/hooks/dms-hook.sh                   automatic-routing hook
-#   ~/.claude/settings.json                       UserPromptSubmit entry (merged, backup kept)
+#   ~/.claude/settings.json                       UserPromptSubmit entry (merged, backup kept);
+#                                                 --default-off also sets env DMS_DEFAULT=off
 # Removes the legacy "model-selection" skill and "model-routing.sh" hook from earlier versions
 # unless --keep-legacy is given.
 set -euo pipefail
@@ -20,15 +21,16 @@ AGENTS_DIR="$HOME/.agents"
 HOOK_DST="$CLAUDE_DIR/hooks/dms-hook.sh"
 SETTINGS="$CLAUDE_DIR/settings.json"
 
-do_hook=1; do_agents=1; do_command=1; remove_legacy=1; uninstall=0
+do_hook=1; do_agents=1; do_command=1; remove_legacy=1; uninstall=0; default_off=0
 for arg in "$@"; do
   case "$arg" in
     --no-hook) do_hook=0 ;;
     --no-agents) do_agents=0 ;;
     --no-command) do_command=0 ;;
+    --default-off) default_off=1 ;;
     --keep-legacy) remove_legacy=0 ;;
     --uninstall) uninstall=1 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -41,9 +43,9 @@ update_settings() {
   local mode="$1"
   mkdir -p "$CLAUDE_DIR"
   [ -f "$SETTINGS" ] && cp "$SETTINGS" "$SETTINGS.bak-dms"
-  python3 - "$SETTINGS" "$HOOK_DST" "$mode" <<'PY'
+  python3 - "$SETTINGS" "$HOOK_DST" "$mode" "$default_off" <<'PY'
 import json, os, sys
-path, hook, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+path, hook, mode, default_off = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
 data = {}
 if os.path.exists(path) and os.path.getsize(path) > 0:
     with open(path, encoding="utf-8") as f:
@@ -61,7 +63,7 @@ for g in groups:
         kept.append(g)
 if mode == "add":
     kept.append({"hooks": [{"type": "command",
-                            "command": f'"{hook}" 2>/dev/null || true',
+                            "command": f'"{hook}"',
                             "timeout": 10}]})
 if kept:
     hooks["UserPromptSubmit"] = kept
@@ -69,6 +71,15 @@ else:
     hooks.pop("UserPromptSubmit", None)
 if not hooks:
     data.pop("hooks", None)
+env = data.get("env", {})
+if mode == "add" and default_off:
+    env["DMS_DEFAULT"] = "off"
+else:
+    env.pop("DMS_DEFAULT", None)
+if env:
+    data["env"] = env
+else:
+    data.pop("env", None)
 tmp = path + ".tmp-dms"
 with open(tmp, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)

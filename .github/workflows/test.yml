@@ -1,0 +1,74 @@
+# Tests for the DMS skill. Runs on pull requests, on pushes to main, by hand,
+# and as the required first job of the Release workflow.
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux (bash + pwsh hook)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version is consistent
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          skill = pathlib.Path("0-dynamic-model-selection")
+          version = (skill / "VERSION").read_text().strip()
+          meta = re.search(r"^\s+version:\s*(\S+)", (skill / "SKILL.md").read_text(), re.M)
+          changelog = (skill / "CHANGELOG.md").read_text()
+          errors = []
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version): errors.append(f"VERSION is not X.Y.Z: {version!r}")
+          if not meta or meta.group(1) != version: errors.append(f"SKILL.md metadata.version {meta and meta.group(1)!r} != VERSION {version}")
+          if not re.search(rf"^## {re.escape(version)}\b", changelog, re.M): errors.append(f"CHANGELOG.md has no '## {version}' section")
+          print("\n".join(errors) or f"version {version} consistent")
+          sys.exit(1 if errors else 0)
+          PY
+
+      - name: shellcheck
+        run: shellcheck 0-dynamic-model-selection/scripts/*.sh
+
+      - name: Hook cases (bash)
+        run: python3 tests/run_hook_tests.py bash 0-dynamic-model-selection/scripts/dms-hook.sh
+
+      - name: Hook cases (pwsh on Linux)
+        run: python3 tests/run_hook_tests.py pwsh -NoProfile -File 0-dynamic-model-selection/scripts/dms-hook.ps1
+
+      - name: Installer (bash)
+        run: python3 tests/test_install.py bash
+
+  windows:
+    name: Windows (PowerShell 5.1 + 7)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PSScriptAnalyzer (errors only)
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $issues = Invoke-ScriptAnalyzer -Path 0-dynamic-model-selection/scripts -Severity Error
+          $issues | Format-Table -AutoSize
+          if ($issues) { exit 1 }
+
+      - name: Hook cases (Windows PowerShell 5.1)
+        run: python tests/run_hook_tests.py powershell -NoProfile -ExecutionPolicy Bypass -File 0-dynamic-model-selection/scripts/dms-hook.ps1
+
+      - name: Hook cases (PowerShell 7)
+        run: python tests/run_hook_tests.py pwsh -NoProfile -ExecutionPolicy Bypass -File 0-dynamic-model-selection/scripts/dms-hook.ps1
+
+      - name: Installer (Windows PowerShell 5.1)
+        run: python tests/test_install.py powershell
+
+      - name: Installer (PowerShell 7)
+        run: python tests/test_install.py pwsh

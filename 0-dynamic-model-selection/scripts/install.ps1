@@ -8,7 +8,8 @@
     %USERPROFILE%\.agents\skills\0-dynamic-model-selection\   shared skills folder for other agents
     %USERPROFILE%\.claude\commands\DMS.md                     /DMS slash command
     %USERPROFILE%\.claude\hooks\dms-hook.ps1                  automatic-routing hook
-    %USERPROFILE%\.claude\settings.json                       UserPromptSubmit entry (merged, backup kept)
+    %USERPROFILE%\.claude\settings.json                       UserPromptSubmit entry (merged, backup kept);
+                                                              -DefaultOff also sets env DMS_DEFAULT=off
   Removes the legacy "model-selection" skill and "model-routing.sh" hook unless -KeepLegacy is given.
 
 .EXAMPLE
@@ -20,6 +21,7 @@ param(
   [switch]$NoHook,
   [switch]$NoAgents,
   [switch]$NoCommand,
+  [switch]$DefaultOff,
   [switch]$KeepLegacy,
   [switch]$Uninstall
 )
@@ -37,33 +39,46 @@ function Update-Settings([string]$Mode) {
   $data = [pscustomobject]@{}
   if ((Test-Path $Settings) -and ((Get-Item $Settings).Length -gt 0)) {
     Copy-Item $Settings "$Settings.bak-dms" -Force
-    $data = Get-Content $Settings -Raw | ConvertFrom-Json
+    $data = Get-Content $Settings -Raw -Encoding UTF8 | ConvertFrom-Json
   }
-  if (-not $data.hooks) { $data | Add-Member -NotePropertyName hooks -NotePropertyValue ([pscustomobject]@{}) -Force }
+  if (-not $data.PSObject.Properties['hooks']) { $data | Add-Member -NotePropertyName hooks -NotePropertyValue ([pscustomobject]@{}) -Force }
   $groups = @()
-  if ($data.hooks.UserPromptSubmit) { $groups = @($data.hooks.UserPromptSubmit) }
+  if ($data.hooks.PSObject.Properties['UserPromptSubmit']) { $groups = @($data.hooks.UserPromptSubmit) }
   $kept = @()
   foreach ($g in $groups) {
     $inner = @($g.hooks | Where-Object { $_.command -notmatch 'dms-hook|model-routing\.sh' })
     if ($inner.Count -gt 0) { $g.hooks = $inner; $kept += $g }
   }
   if ($Mode -eq 'add') {
+    # Works whether Claude Code runs hooks through PowerShell or Git Bash.
     $kept += [pscustomobject]@{
       hooks = @([pscustomobject]@{
         type    = 'command'
-        shell   = 'powershell'
-        command = "& '$HookDst'"
+        command = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$HookDst`""
         timeout = 10
       })
     }
   }
   if ($kept.Count -gt 0) {
-    $data.hooks | Add-Member -NotePropertyName UserPromptSubmit -NotePropertyValue $kept -Force
+    $data.hooks | Add-Member -NotePropertyName UserPromptSubmit -NotePropertyValue ([object[]]$kept) -Force
   } elseif ($data.hooks.PSObject.Properties['UserPromptSubmit']) {
     $data.hooks.PSObject.Properties.Remove('UserPromptSubmit')
   }
+  if (@($data.hooks.PSObject.Properties).Count -eq 0) { $data.PSObject.Properties.Remove('hooks') }
+
+  if (-not $data.PSObject.Properties['env']) { $data | Add-Member -NotePropertyName env -NotePropertyValue ([pscustomobject]@{}) -Force }
+  if ($Mode -eq 'add' -and $DefaultOff) {
+    $data.env | Add-Member -NotePropertyName DMS_DEFAULT -NotePropertyValue 'off' -Force
+  } elseif ($data.env.PSObject.Properties['DMS_DEFAULT']) {
+    $data.env.PSObject.Properties.Remove('DMS_DEFAULT')
+  }
+  if (@($data.env.PSObject.Properties).Count -eq 0) { $data.PSObject.Properties.Remove('env') }
+
+  # Write to a temporary file first, then swap it in, so a failure never leaves a half-written settings.json.
   $json = ConvertTo-Json $data -Depth 20
-  [System.IO.File]::WriteAllText($Settings, $json + "`n", (New-Object System.Text.UTF8Encoding($false)))
+  $tmp = "$Settings.tmp-dms"
+  [System.IO.File]::WriteAllText($tmp, $json + "`n", (New-Object System.Text.UTF8Encoding($false)))
+  Move-Item -LiteralPath $tmp -Destination $Settings -Force
 }
 
 function Copy-Skill([string]$Root) {
